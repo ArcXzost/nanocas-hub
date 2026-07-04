@@ -6,3 +6,6 @@ node_modules/
 *.tsbuildinfo
 .next
 ecies_cross_vectors.json
+
+.vercel
+.env*
