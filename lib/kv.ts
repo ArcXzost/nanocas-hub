@@ -166,18 +166,18 @@ function nextRoomID(): string {
 }
 
 export async function createRoom(name: string, owner: string, roomKeyHex: string, turnOpts?: { turn_addr?: string; turn_username?: string; turn_password?: string; turn_realm?: string }): Promise<RoomRecord> {
-  const room: RoomRecord = {
+  const room: any = {
     id: nextRoomID(),
     name,
     owner,
     room_key_hex: roomKeyHex,
     created_at: Date.now(),
-    turn_addr: turnOpts?.turn_addr,
-    turn_username: turnOpts?.turn_username,
-    turn_password: turnOpts?.turn_password,
-    turn_realm: turnOpts?.turn_realm,
   }
-  await kvCall(kv => kv.hset(`room:${room.id}`, room as any), undefined)
+  if (turnOpts?.turn_addr) room.turn_addr = turnOpts.turn_addr
+  if (turnOpts?.turn_username) room.turn_username = turnOpts.turn_username
+  if (turnOpts?.turn_password) room.turn_password = turnOpts.turn_password
+  if (turnOpts?.turn_realm) room.turn_realm = turnOpts.turn_realm
+  await kvCall(kv => kv.hset(`room:${room.id}`, room), undefined)
   await kvCall(kv => kv.sadd('rooms:list', room.id), undefined)
   // Owner is automatically an admitted member
   const ownerPeer = await kvCall(kv => kv.hgetall(`peer:${owner}`), memoryStore().peers.get(owner) || null) as PeerRecord | null
