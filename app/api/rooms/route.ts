@@ -6,9 +6,7 @@ export async function GET(req: NextRequest) {
   const token = auth.replace('Bearer ', '')
 
   if (!token) {
-    const rooms = await listRooms()
-    const safe = rooms.map(r => ({ id: r.id, name: r.name, owner: r.owner, created_at: r.created_at }))
-    return NextResponse.json(safe)
+    return NextResponse.json([])
   }
 
   const peer = await getPeerByBearerToken(token)
