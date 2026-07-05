@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registerPeer, listPeers, getPeer } from '@/lib/kv'
+import { registerPeer, reRegisterPeer, listPeers, getPeer } from '@/lib/kv'
 
 export async function GET() {
   const peers = await listPeers()
@@ -15,11 +15,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'missing peer id' }, { status: 400 })
     }
     const existing = await getPeer(id)
-    if (existing) {
-      return NextResponse.json({ error: 'peer already registered' }, { status: 409 })
+    if (!existing) {
+      const token = await registerPeer(id, { addr, listen_addr, ext_addr, relay_addr, version, nat_type, public_key })
+      return NextResponse.json({ status: 'registered', id, bearer_token: token })
     }
-    const token = await registerPeer(id, { addr, listen_addr, ext_addr, relay_addr, version, nat_type, public_key })
-    return NextResponse.json({ status: 'registered', id, bearer_token: token })
+    // Re-registration: refresh bearer token and peer metadata
+    const newToken = await reRegisterPeer(id, { addr, listen_addr, ext_addr, relay_addr, version, nat_type, public_key })
+    return NextResponse.json({ status: 'registered', id, bearer_token: newToken })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

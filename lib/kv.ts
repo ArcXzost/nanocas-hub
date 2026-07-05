@@ -52,6 +52,28 @@ export async function registerPeer(id: string, data: { addr?: string; listen_add
   return token
 }
 
+export async function reRegisterPeer(id: string, data: { addr?: string; listen_addr?: string; ext_addr?: string; relay_addr?: string; version?: string; nat_type?: string; public_key?: string }): Promise<string> {
+  const newToken = crypto.randomUUID()
+  const existing = await kvCall(kv => kv.hgetall(`peer:${id}`), memoryStore().peers.get(id) || null) as PeerRecord | null
+  if (!existing) return newToken
+
+  existing.bearer_token = newToken
+  existing.last_seen = Date.now()
+  existing.online = true
+  if (data.addr) existing.addr = data.addr
+  if (data.listen_addr) existing.listen_addr = data.listen_addr
+  if (data.ext_addr) existing.ext_addr = data.ext_addr
+  if (data.relay_addr) existing.relay_addr = data.relay_addr
+  if (data.version) existing.version = data.version
+  if (data.nat_type) existing.nat_type = data.nat_type
+  if (data.public_key) existing.public_key = data.public_key
+
+  await kvCall(kv => kv.hset(`peer:${id}`, existing as any), undefined)
+  await kvCall(kv => kv.set(`bearer:${newToken}`, id), undefined)
+  memoryStore().peers.set(id, existing) as any
+  return newToken
+}
+
 export async function getPeerByBearerToken(token: string): Promise<PeerRecord | null> {
   if (hasKV) {
     const peerId = await kvCall(kv => kv.get(`bearer:${token}`), null) as string | null
