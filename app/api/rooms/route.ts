@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRoom, listRooms, getPeerByBearerToken } from '@/lib/kv'
+import { createRoom, listRooms, getPeerByBearerToken, getPeerRooms } from '@/lib/kv'
 
-export async function GET() {
-  const rooms = await listRooms()
+export async function GET(req: NextRequest) {
+  const auth = req.headers.get('authorization') || ''
+  const token = auth.replace('Bearer ', '')
+  
+  let rooms = await listRooms()
+
+  if (token) {
+    const peer = await getPeerByBearerToken(token)
+    if (peer) {
+      rooms = await getPeerRooms(peer.id)
+    }
+  }
+
   // Strip room_key_hex from public listing
   const safe = rooms.map(r => ({ id: r.id, name: r.name, owner: r.owner, created_at: r.created_at }))
   return NextResponse.json(safe)

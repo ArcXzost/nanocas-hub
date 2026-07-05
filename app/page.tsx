@@ -94,7 +94,7 @@ export default function Dashboard() {
           {hubConnected ? 'hub.online' : 'hub.offline'}
         </span>
         <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          {onlineCount}/{peers.length} peers online
+          {onlineCount}/{peers.length} peers
         </span>
         <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
           {rooms.length} rooms
@@ -109,9 +109,24 @@ export default function Dashboard() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
-        <TabButton label="Files" active={tab === 'files'} onClick={() => setTab('files')} />
-        <TabButton label="Peers" active={tab === 'peers'} onClick={() => setTab('peers')} />
-        <TabButton label="Rooms" active={tab === 'rooms'} onClick={() => setTab('rooms')} />
+        <TabButton 
+          label="Global Files" 
+          active={tab === 'files'} 
+          onClick={() => setTab('files')} 
+          icon={<svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>}
+        />
+        <TabButton 
+          label="Mesh Peers" 
+          active={tab === 'peers'} 
+          onClick={() => setTab('peers')} 
+          icon={<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>}
+        />
+        <TabButton 
+          label="Active Rooms" 
+          active={tab === 'rooms'} 
+          onClick={() => setTab('rooms')} 
+          icon={<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>}
+        />
       </div>
 
       {/* Files Tab */}
@@ -261,22 +276,32 @@ export default function Dashboard() {
   )
 }
 
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function TabButton({ label, active, onClick, icon }: { label: string; active: boolean; onClick: () => void; icon?: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       style={{
-        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 20px',
         border: 'none',
         background: 'none',
         color: active ? 'var(--accent)' : 'var(--text-secondary)',
         borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
         cursor: 'pointer',
-        fontSize: 14,
-        fontWeight: active ? 600 : 400,
-        transition: 'color 0.15s',
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        transition: 'all 0.15s',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em'
       }}
     >
+      {icon && (
+        <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {icon}
+        </div>
+      )}
       {label}
     </button>
   )

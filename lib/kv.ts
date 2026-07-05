@@ -66,12 +66,22 @@ export async function getPeerByBearerToken(token: string): Promise<PeerRecord | 
   return null
 }
 
-export async function peerHeartbeat(id: string): Promise<boolean> {
+export async function peerHeartbeat(id: string, updates: { addr?: string, listen_addr?: string } = {}): Promise<boolean> {
   const exists = await kvCall(kv => kv.exists(`peer:${id}`), memoryStore().peers.has(id) ? 1 : 0)
   if (!exists) return false
-  await kvCall(kv => kv.hset(`peer:${id}`, { last_seen: Date.now(), online: true }), undefined)
+  
+  const payload: any = { last_seen: Date.now(), online: true }
+  if (updates.addr) payload.addr = updates.addr
+  if (updates.listen_addr) payload.listen_addr = updates.listen_addr
+
+  await kvCall(kv => kv.hset(`peer:${id}`, payload), undefined)
   const p = memoryStore().peers.get(id)
-  if (p) { p.last_seen = Date.now(); p.online = true }
+  if (p) { 
+    p.last_seen = payload.last_seen
+    p.online = payload.online
+    if (payload.addr) p.addr = payload.addr
+    if (payload.listen_addr) p.listen_addr = payload.listen_addr
+  }
   return true
 }
 

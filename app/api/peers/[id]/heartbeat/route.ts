@@ -7,7 +7,17 @@ export const POST = withAuth(async (req: NextRequest, peer, ctx) => {
   if (peer.id !== peerId) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
-  const ok = await peerHeartbeat(peerId)
+
+  let updates = {}
+  try {
+    const body = await req.json()
+    if (body.addr) updates = { ...updates, addr: body.addr }
+    if (body.listen_addr) updates = { ...updates, listen_addr: body.listen_addr }
+  } catch (e) {
+    // ignore missing body
+  }
+
+  const ok = await peerHeartbeat(peerId, updates)
   if (!ok) {
     return NextResponse.json({ error: 'unknown peer' }, { status: 404 })
   }
