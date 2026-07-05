@@ -19,6 +19,7 @@ export const GET = withAuth(async (req: NextRequest, peer, ctx) => {
       peer_id: m.peer_id,
       addr: p?.addr || '',
       listen_addr: p?.listen_addr || '',
+      ext_addr: p?.ext_addr || '',
       online: p?.online || false,
       last_seen: p?.last_seen || 0,
     }

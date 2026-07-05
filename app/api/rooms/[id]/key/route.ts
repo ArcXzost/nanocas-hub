@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRoom, getMyMembership, getPeerByBearerToken, getRoomMembers } from '@/lib/kv'
+import { getRoom, getMyMembership, getPeerByBearerToken, getRoomMembers, listPeers } from '@/lib/kv'
 import { eciesEncrypt, toHex, fromHex } from '@/lib/ecies'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -31,13 +31,27 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   // Get list of admitted peers with addresses for direct P2P
   const allMembers = await getRoomMembers(params.id)
+  const allPeers = await listPeers()
+  const peerMap = new Map(allPeers.map(p => [p.id, p]))
   const admittedPeers = allMembers
     .filter(m => m.admitted && m.peer_id !== peer.id)
-    .map(m => ({ peer_id: m.peer_id }))
+    .map(m => {
+      const p = peerMap.get(m.peer_id)
+      return {
+        peer_id: m.peer_id,
+        listen_addr: p?.listen_addr || '',
+        ext_addr: p?.ext_addr || '',
+        relay_addr: p?.relay_addr || '',
+      }
+    })
 
   return NextResponse.json({
     room_key_hex: toHex(encrypted),
     room_name: room.name,
+    turn_addr: room.turn_addr || '',
+    turn_username: room.turn_username || '',
+    turn_password: room.turn_password || '',
+    turn_realm: room.turn_realm || '',
     peers: admittedPeers,
   })
 }

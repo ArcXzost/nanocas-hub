@@ -10,7 +10,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { id, addr, listen_addr, version, nat_type, public_key } = body
+    const { id, addr, listen_addr, ext_addr, relay_addr, version, nat_type, public_key } = body
     if (!id) {
       return NextResponse.json({ error: 'missing peer id' }, { status: 400 })
     }
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (existing) {
       return NextResponse.json({ error: 'peer already registered' }, { status: 409 })
     }
-    const token = await registerPeer(id, { addr, listen_addr, version, nat_type, public_key })
+    const token = await registerPeer(id, { addr, listen_addr, ext_addr, relay_addr, version, nat_type, public_key })
     return NextResponse.json({ status: 'registered', id, bearer_token: token })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

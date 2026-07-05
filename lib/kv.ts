@@ -30,12 +30,14 @@ export async function getPeer(id: string): Promise<PeerRecord | null> {
   return p as PeerRecord | null
 }
 
-export async function registerPeer(id: string, data: { addr?: string; listen_addr?: string; version?: string; nat_type?: string; public_key?: string }): Promise<string> {
+export async function registerPeer(id: string, data: { addr?: string; listen_addr?: string; ext_addr?: string; relay_addr?: string; version?: string; nat_type?: string; public_key?: string }): Promise<string> {
   const token = crypto.randomUUID()
   const entry: PeerRecord = {
     id,
     addr: data.addr || '',
     listen_addr: data.listen_addr || '',
+    ext_addr: data.ext_addr || '',
+    relay_addr: data.relay_addr || '',
     version: data.version || '',
     nat_type: data.nat_type || '',
     public_key: data.public_key,
@@ -66,13 +68,15 @@ export async function getPeerByBearerToken(token: string): Promise<PeerRecord | 
   return null
 }
 
-export async function peerHeartbeat(id: string, updates: { addr?: string, listen_addr?: string } = {}): Promise<boolean> {
+export async function peerHeartbeat(id: string, updates: { addr?: string, listen_addr?: string, ext_addr?: string, relay_addr?: string } = {}): Promise<boolean> {
   const exists = await kvCall(kv => kv.exists(`peer:${id}`), memoryStore().peers.has(id) ? 1 : 0)
   if (!exists) return false
   
   const payload: any = { last_seen: Date.now(), online: true }
   if (updates.addr) payload.addr = updates.addr
   if (updates.listen_addr) payload.listen_addr = updates.listen_addr
+  if (updates.ext_addr) payload.ext_addr = updates.ext_addr
+  if (updates.relay_addr) payload.relay_addr = updates.relay_addr
 
   await kvCall(kv => kv.hset(`peer:${id}`, payload), undefined)
   const p = memoryStore().peers.get(id)
@@ -81,6 +85,8 @@ export async function peerHeartbeat(id: string, updates: { addr?: string, listen
     p.online = payload.online
     if (payload.addr) p.addr = payload.addr
     if (payload.listen_addr) p.listen_addr = payload.listen_addr
+    if (payload.ext_addr) p.ext_addr = payload.ext_addr
+    if (payload.relay_addr) p.relay_addr = payload.relay_addr
   }
   return true
 }
@@ -137,13 +143,17 @@ function nextRoomID(): string {
   return `room_${crypto.randomUUID().slice(0, 8)}`
 }
 
-export async function createRoom(name: string, owner: string, roomKeyHex: string): Promise<RoomRecord> {
+export async function createRoom(name: string, owner: string, roomKeyHex: string, turnOpts?: { turn_addr?: string; turn_username?: string; turn_password?: string; turn_realm?: string }): Promise<RoomRecord> {
   const room: RoomRecord = {
     id: nextRoomID(),
     name,
     owner,
     room_key_hex: roomKeyHex,
     created_at: Date.now(),
+    turn_addr: turnOpts?.turn_addr,
+    turn_username: turnOpts?.turn_username,
+    turn_password: turnOpts?.turn_password,
+    turn_realm: turnOpts?.turn_realm,
   }
   await kvCall(kv => kv.hset(`room:${room.id}`, room as any), undefined)
   await kvCall(kv => kv.sadd('rooms:list', room.id), undefined)

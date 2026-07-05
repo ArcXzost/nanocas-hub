@@ -8,11 +8,12 @@ export const POST = withAuth(async (req: NextRequest, peer, ctx) => {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 
-  let updates = {}
+  let updates: { addr?: string; listen_addr?: string; ext_addr?: string } = {}
   try {
     const body = await req.json()
-    if (body.addr) updates = { ...updates, addr: body.addr }
-    if (body.listen_addr) updates = { ...updates, listen_addr: body.listen_addr }
+    if (body.addr) updates.addr = body.addr
+    if (body.listen_addr) updates.listen_addr = body.listen_addr
+    if (body.ext_addr) updates.ext_addr = body.ext_addr
   } catch (e) {
     // ignore missing body
   }
