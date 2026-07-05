@@ -4,17 +4,19 @@ import { createRoom, listRooms, getPeerByBearerToken, getPeerRooms } from '@/lib
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization') || ''
   const token = auth.replace('Bearer ', '')
-  
-  let rooms = await listRooms()
 
-  if (token) {
-    const peer = await getPeerByBearerToken(token)
-    if (peer) {
-      rooms = await getPeerRooms(peer.id)
-    }
+  if (!token) {
+    const rooms = await listRooms()
+    const safe = rooms.map(r => ({ id: r.id, name: r.name, owner: r.owner, created_at: r.created_at }))
+    return NextResponse.json(safe)
   }
 
-  // Strip room_key_hex from public listing
+  const peer = await getPeerByBearerToken(token)
+  if (!peer) {
+    return NextResponse.json([])
+  }
+
+  const rooms = await getPeerRooms(peer.id)
   const safe = rooms.map(r => ({ id: r.id, name: r.name, owner: r.owner, created_at: r.created_at }))
   return NextResponse.json(safe)
 }

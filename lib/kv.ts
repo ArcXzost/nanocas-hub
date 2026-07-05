@@ -273,6 +273,7 @@ export async function getPeerRooms(peerId: string): Promise<RoomRecord[]> {
   const memberships = await getMemberByPeerId(peerId)
   const rooms: RoomRecord[] = []
   for (const m of memberships) {
+    if (!m.admitted) continue
     const r = await getRoom(m.room_id)
     if (r) rooms.push(r)
   }
