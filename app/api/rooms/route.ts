@@ -31,16 +31,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { name, turn_addr, turn_username, turn_password, turn_realm } = body
+    const { name, encrypted_key, turn_addr, turn_username, turn_password, turn_realm } = body
     if (!name) {
       return NextResponse.json({ error: 'missing room name' }, { status: 400 })
     }
+    if (!encrypted_key) {
+      return NextResponse.json({ error: 'missing encrypted key' }, { status: 400 })
+    }
 
-    // Hub generates the room key
-    const keyBytes = crypto.getRandomValues(new Uint8Array(32))
-    const roomKeyHex = Array.from(keyBytes).map(b => b.toString(16).padStart(2, '0')).join('')
-
-    const room = await createRoom(name, peer.id, roomKeyHex, { turn_addr, turn_username, turn_password, turn_realm })
+    const room = await createRoom(name, peer.id, encrypted_key, { turn_addr, turn_username, turn_password, turn_realm })
     return NextResponse.json({
       id: room.id,
       name: room.name,

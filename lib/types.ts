@@ -26,7 +26,7 @@ export interface RoomRecord {
   id: string
   name: string
   owner: string           // peer_id who created the room
-  room_key_hex: string    // 32-byte AES key, hex-encoded — never exposed via list
+  room_key_hex?: string   // Deprecated: plaintext room key
   created_at: number
   turn_addr?: string      // TURN relay server address
   turn_username?: string  // TURN username
@@ -40,4 +40,5 @@ export interface RoomMembership {
   public_key: string      // peer's X25519 public key hex
   admitted: boolean       // false = pending, true = admitted by owner
   admitted_at?: number
+  encrypted_key?: string  // ECIES-encrypted room key for this peer
 }

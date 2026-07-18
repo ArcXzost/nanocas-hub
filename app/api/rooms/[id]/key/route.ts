@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRoom, getMyMembership, getPeerByBearerToken, getRoomMembers, listPeers } from '@/lib/kv'
-import { eciesEncrypt, toHex, fromHex } from '@/lib/ecies'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   // Verify peer is admitted
@@ -21,13 +20,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'room not found' }, { status: 404 })
   }
 
-  // Encrypt room key with peer's public key
-  const pubKey = membership.public_key
-  if (!pubKey) {
-    return NextResponse.json({ error: 'no public key on record' }, { status: 400 })
+  const encryptedKey = membership.encrypted_key
+  if (!encryptedKey) {
+    return NextResponse.json({ error: 'no encrypted key on record for this peer' }, { status: 400 })
   }
-
-  const encrypted = await eciesEncrypt(pubKey, fromHex(room.room_key_hex))
 
   // Get list of admitted peers with addresses for direct P2P
   const allMembers = await getRoomMembers(params.id)
@@ -46,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     })
 
   return NextResponse.json({
-    room_key_hex: toHex(encrypted),
+    room_key_hex: encryptedKey,
     room_name: room.name,
     turn_addr: room.turn_addr || '',
     turn_username: room.turn_username || '',

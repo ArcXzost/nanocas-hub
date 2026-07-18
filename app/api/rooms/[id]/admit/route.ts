@@ -13,12 +13,15 @@ export const POST = withAuth(async (req: NextRequest, peer, ctx) => {
   }
 
   const body = await req.json()
-  const { peer_id } = body
+  const { peer_id, encrypted_key } = body
   if (!peer_id) {
     return NextResponse.json({ error: 'missing peer_id' }, { status: 400 })
   }
+  if (!encrypted_key) {
+    return NextResponse.json({ error: 'missing encrypted_key' }, { status: 400 })
+  }
 
-  const ok = await admitPeer(roomId, peer_id)
+  const ok = await admitPeer(roomId, peer_id, encrypted_key)
   if (!ok) {
     return NextResponse.json({ error: 'no pending join request from this peer' }, { status: 404 })
   }

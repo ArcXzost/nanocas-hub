@@ -9,11 +9,12 @@ type Store = {
   files: Map<string, FileRecord>
   rooms: Map<string, RoomRecord>
   memberships: Map<string, RoomMembership>   // key: `${room_id}:${peer_id}`
+  challenges: Map<string, { value: string; expires: number }>
 }
 
 let mem: Store | null = null
 function memoryStore(): Store {
-  if (!mem) mem = { peers: new Map(), files: new Map(), rooms: new Map(), memberships: new Map() }
+  if (!mem) mem = { peers: new Map(), files: new Map(), rooms: new Map(), memberships: new Map(), challenges: new Map() }
   return mem
 }
 
@@ -23,6 +24,28 @@ async function kvCall<T>(fn: (kv: any) => Promise<T>, fallback: T): Promise<T> {
     try { return await fn(kv) } catch (e) { console.error('[kv]', e); return fallback }
   }
   return fallback
+}
+
+export async function setPeerChallenge(id: string, challenge: string): Promise<void> {
+  await kvCall(kv => kv.set(`challenge:${id}`, challenge, { ex: 300 }), undefined)
+  memoryStore().challenges.set(id, { value: challenge, expires: Date.now() + 300000 })
+}
+
+export async function getPeerChallenge(id: string): Promise<string | null> {
+  const c = await kvCall<string | null>(kv => kv.get(`challenge:${id}`), null)
+  if (c) return c
+  const entry = memoryStore().challenges.get(id)
+  if (!entry) return null
+  if (Date.now() > entry.expires) {
+    memoryStore().challenges.delete(id)
+    return null
+  }
+  return entry.value
+}
+
+export async function deletePeerChallenge(id: string): Promise<void> {
+  await kvCall(kv => kv.del(`challenge:${id}`), undefined)
+  memoryStore().challenges.delete(id)
 }
 
 export async function getPeer(id: string): Promise<PeerRecord | null> {
@@ -57,6 +80,7 @@ export async function reRegisterPeer(id: string, data: { addr?: string; listen_a
   const existing = await kvCall(kv => kv.hgetall(`peer:${id}`), memoryStore().peers.get(id) || null) as PeerRecord | null
   if (!existing) return newToken
 
+  const oldToken = existing.bearer_token
   existing.bearer_token = newToken
   existing.last_seen = Date.now()
   existing.online = true
@@ -70,6 +94,9 @@ export async function reRegisterPeer(id: string, data: { addr?: string; listen_a
 
   await kvCall(kv => kv.hset(`peer:${id}`, existing as any), undefined)
   await kvCall(kv => kv.set(`bearer:${newToken}`, id), undefined)
+  if (oldToken) {
+    await kvCall(kv => kv.del(`bearer:${oldToken}`), undefined)
+  }
   memoryStore().peers.set(id, existing) as any
   return newToken
 }
@@ -165,12 +192,11 @@ function nextRoomID(): string {
   return `room_${crypto.randomUUID().slice(0, 8)}`
 }
 
-export async function createRoom(name: string, owner: string, roomKeyHex: string, turnOpts?: { turn_addr?: string; turn_username?: string; turn_password?: string; turn_realm?: string }): Promise<RoomRecord> {
+export async function createRoom(name: string, owner: string, encryptedKey: string, turnOpts?: { turn_addr?: string; turn_username?: string; turn_password?: string; turn_realm?: string }): Promise<RoomRecord> {
   const room: any = {
     id: nextRoomID(),
     name,
     owner,
-    room_key_hex: roomKeyHex,
     created_at: Date.now(),
   }
   if (turnOpts?.turn_addr) room.turn_addr = turnOpts.turn_addr
@@ -188,12 +214,25 @@ export async function createRoom(name: string, owner: string, roomKeyHex: string
     public_key: ownerPubKey,
     admitted: true,
     admitted_at: Date.now(),
+    encrypted_key: encryptedKey,
   }
   await kvCall(kv => kv.hset(`room_member:${room.id}:${owner}`, membership as any), undefined)
   await kvCall(kv => kv.sadd(`room:${room.id}:members`, owner), undefined)
   memoryStore().rooms.set(room.id, room)
   memoryStore().memberships.set(`${room.id}:${owner}`, membership)
   return room
+}
+
+export async function updateRoomTurnConfig(roomId: string, turnAddr: string, turnUser: string, turnPass: string, turnRealm: string): Promise<boolean> {
+  const room = await getRoom(roomId)
+  if (!room) return false
+  room.turn_addr = turnAddr
+  room.turn_username = turnUser
+  room.turn_password = turnPass
+  room.turn_realm = turnRealm
+  await kvCall(kv => kv.hset(`room:${roomId}`, room as any), undefined)
+  memoryStore().rooms.set(roomId, room)
+  return true
 }
 
 export async function getRoom(roomId: string): Promise<RoomRecord | null> {
@@ -231,7 +270,7 @@ export async function requestJoinRoom(roomId: string, peerId: string, publicKey:
   return true
 }
 
-export async function admitPeer(roomId: string, peerId: string): Promise<boolean> {
+export async function admitPeer(roomId: string, peerId: string, encryptedKey: string): Promise<boolean> {
   const room = await getRoom(roomId)
   if (!room) return false
 
@@ -241,6 +280,7 @@ export async function admitPeer(roomId: string, peerId: string): Promise<boolean
 
   membership.admitted = true
   membership.admitted_at = Date.now()
+  membership.encrypted_key = encryptedKey
   await kvCall(kv => kv.hset(`room_member:${key}`, membership as any), undefined)
   await kvCall(kv => kv.sadd(`room:${roomId}:members`, peerId), undefined)
   await kvCall(kv => kv.srem(`room:${roomId}:joiners`, peerId), undefined)
@@ -313,4 +353,41 @@ export async function cleanupStalePeers(timeoutMs = 90000): Promise<number> {
     }
   }
   return cleaned
+}
+
+let relayQueues: Map<string, string[]> | null = null
+function getRelayQueues(): Map<string, string[]> {
+  if (!relayQueues) relayQueues = new Map()
+  return relayQueues
+}
+
+export async function enqueueMessage(peerId: string, message: string): Promise<void> {
+  await kvCall(kv => kv.lpush(`relay:${peerId}`, message), undefined)
+  await kvCall(kv => kv.expire(`relay:${peerId}`, 86400), undefined) // TTL: 24h
+  if (!hasKV) {
+    const q = getRelayQueues()
+    if (!q.has(peerId)) q.set(peerId, [])
+    q.get(peerId)!.unshift(message)
+  }
+}
+
+export async function dequeueMessages(peerId: string): Promise<string[]> {
+  const msgs = await kvCall<string[]>(async kv => {
+    const results: string[] = []
+    while (true) {
+      const msg = await kv.rpop(`relay:${peerId}`)
+      if (msg === null) break
+      results.push(msg)
+    }
+    return results
+  }, [])
+  if (!hasKV && msgs.length === 0) {
+    const q = getRelayQueues().get(peerId)
+    if (q) {
+      const all = [...q]
+      getRelayQueues().delete(peerId)
+      return all.reverse()
+    }
+  }
+  return msgs
 }

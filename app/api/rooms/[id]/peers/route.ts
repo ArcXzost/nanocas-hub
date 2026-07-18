@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRoom, getRoomMembers, listPeers } from '@/lib/kv'
+import { getRoom, getRoomMembers, listPeers, getMyMembership } from '@/lib/kv'
 import { withAuth } from '@/lib/routes'
 
 export const GET = withAuth(async (req: NextRequest, peer, ctx) => {
   const room = await getRoom(ctx.params.id)
   if (!room) {
     return NextResponse.json({ error: 'room not found' }, { status: 404 })
+  }
+
+  const membership = await getMyMembership(ctx.params.id, peer.id)
+  if (!membership || !membership.admitted) {
+    return NextResponse.json({ error: 'not a member of this room' }, { status: 403 })
   }
 
   const members = await getRoomMembers(ctx.params.id)
