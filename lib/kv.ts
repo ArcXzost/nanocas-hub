@@ -371,6 +371,45 @@ export async function enqueueMessage(peerId: string, message: string): Promise<v
   }
 }
 
+// ─── ICE Candidates ─────────────────────────────────────────────
+
+export interface ICECandidate {
+  type: string   // "host" | "srflx" | "relay"
+  address: string
+  priority: number
+}
+
+export async function storeIceCandidates(roomId: string, peerId: string, candidates: ICECandidate[]): Promise<void> {
+  const key = `ice:${roomId}:${peerId}`
+  const data = JSON.stringify(candidates)
+  await kvCall(kv => kv.set(key, data, { ex: 300 }), undefined)
+  memoryStore().challenges.set(key, { value: data, expires: Date.now() + 300000 })
+}
+
+export async function getIceCandidates(roomId: string, peerId: string): Promise<ICECandidate[]> {
+  const key = `ice:${roomId}:${peerId}`
+  const data = await kvCall<string | null>(kv => kv.get(key), null)
+  if (data) return JSON.parse(data)
+  const entry = memoryStore().challenges.get(key)
+  if (!entry) return []
+  if (Date.now() > entry.expires) {
+    memoryStore().challenges.delete(key)
+    return []
+  }
+  return JSON.parse(entry.value)
+}
+
+export async function getRoomIceCandidates(roomId: string, excludePeerId: string): Promise<Record<string, ICECandidate[]>> {
+  const members = await getRoomMembers(roomId)
+  const result: Record<string, ICECandidate[]> = {}
+  for (const m of members) {
+    if (!m.admitted || m.peer_id === excludePeerId) continue
+    const candidates = await getIceCandidates(roomId, m.peer_id)
+    if (candidates.length > 0) result[m.peer_id] = candidates
+  }
+  return result
+}
+
 export async function dequeueMessages(peerId: string): Promise<string[]> {
   const msgs = await kvCall<string[]>(async kv => {
     const results: string[] = []
